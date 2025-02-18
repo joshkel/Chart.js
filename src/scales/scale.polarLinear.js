@@ -136,10 +136,10 @@ function updateLimits(limits, orig, angle, hLimits, vLimits) {
   }
 }
 
-function createPointLabelItem(scale, index, itemOpts) {
+function createPointLabelItem(scale, iDecimal, itemOpts) {
   const outerDistance = scale.drawingArea;
   const {extra, additionalAngle, padding, size} = itemOpts;
-  const pointLabelPosition = scale.getPointPosition(index, outerDistance + extra + padding, additionalAngle);
+  const pointLabelPosition = scale.getPointPosition(iDecimal, outerDistance + extra + padding, additionalAngle);
   const angle = Math.round(toDegrees(_normalizeAngle(pointLabelPosition.angle + HALF_PI)));
   const y = yForAngle(pointLabelPosition.y, size.h, angle);
   const textAlign = getTextAlignForAngle(angle);
@@ -188,7 +188,7 @@ function buildPointLabelItems(scale, labelSizes, padding) {
     itemOpts.padding = padding[i];
     itemOpts.size = labelSizes[i];
 
-    const item = createPointLabelItem(scale, i, itemOpts);
+    const item = createPointLabelItem(scale, scale._pointLabels[i].value, itemOpts);
     items.push(item);
     if (display === 'auto') {
       item.visible = isNotOverlapped(item, area);
@@ -258,10 +258,10 @@ function drawPointLabelBox(ctx, opts, item) {
   }
 }
 
-function drawPointLabels(scale, labelCount) {
+function drawPointLabels(scale, labels) {
   const {ctx, options: {pointLabels}} = scale;
 
-  for (let i = labelCount - 1; i >= 0; i--) {
+  for (let i = labels.length - 1; i >= 0; i--) {
     const item = scale._pointLabelItems[i];
     if (!item.visible) {
       // overlapping
@@ -274,7 +274,7 @@ function drawPointLabels(scale, labelCount) {
 
     renderText(
       ctx,
-      scale._pointLabels[i],
+      scale._pointLabels[i].label,
       x,
       y + (plFont.lineHeight / 2),
       plFont,
@@ -287,7 +287,7 @@ function drawPointLabels(scale, labelCount) {
   }
 }
 
-function pathRadiusLine(scale, radius, circular, labelCount) {
+function pathRadiusLine(scale, radius, circular, labels) {
   const {ctx} = scale;
   if (circular) {
     // Draw circular arcs between the points
@@ -297,20 +297,20 @@ function pathRadiusLine(scale, radius, circular, labelCount) {
     let pointPosition = scale.getPointPosition(0, radius);
     ctx.moveTo(pointPosition.x, pointPosition.y);
 
-    for (let i = 1; i < labelCount; i++) {
-      pointPosition = scale.getPointPosition(i, radius);
+    for (let i = 1; i < labels.length; i++) {
+      pointPosition = scale.getPointPosition(labels[i].value, radius);
       ctx.lineTo(pointPosition.x, pointPosition.y);
     }
   }
 }
 
-function drawRadiusLine(scale, gridLineOpts, radius, labelCount, borderOpts) {
+function drawRadiusLine(scale, gridLineOpts, radius, labels, borderOpts) {
   const ctx = scale.ctx;
   const circular = gridLineOpts.circular;
 
   const {color, lineWidth} = gridLineOpts;
 
-  if ((!circular && !labelCount) || !color || !lineWidth || radius < 0) {
+  if ((!circular && !labels.length) || !color || !lineWidth || radius < 0) {
     return;
   }
 
@@ -321,7 +321,7 @@ function drawRadiusLine(scale, gridLineOpts, radius, labelCount, borderOpts) {
   ctx.lineDashOffset = borderOpts.dashOffset;
 
   ctx.beginPath();
-  pathRadiusLine(scale, radius, circular, labelCount);
+  pathRadiusLine(scale, radius, circular, labels);
   ctx.closePath();
   ctx.stroke();
   ctx.restore();
@@ -329,7 +329,7 @@ function drawRadiusLine(scale, gridLineOpts, radius, labelCount, borderOpts) {
 
 function createPointLabelContext(parent, index, label) {
   return createContext(parent, {
-    label,
+    ...label,
     index,
     type: 'pointLabel'
   });
@@ -420,7 +420,7 @@ export default class PolarLinearScale extends LinearScaleBase {
     this.yCenter = undefined;
     /** @type {number} */
     this.drawingArea = undefined;
-    /** @type {string[]} */
+    /** @type {import('src/types.js').Tick[]} */
     this._pointLabels = [];
     this._pointLabelItems = [];
   }
@@ -456,13 +456,13 @@ export default class PolarLinearScale extends LinearScaleBase {
   generateTickLabels(ticks) {
     LinearScaleBase.prototype.generateTickLabels.call(this, ticks);
 
-    // Point labels
-    this._pointLabels = this.getLabels()
-      .map((value, index) => {
-        const label = callCallback(this.options.pointLabels.callback, [value, index], this);
-        return label || label === 0 ? label : '';
-      })
-      .filter((v, i) => this.chart.getDataVisibility(i));
+    // Point labels.  core.layout.js update processes left/right/top/bottom
+    // areas before chartArea areas, so the hidden t axis is already processed.
+    const tScale = this.chart.scales.t;
+    this._pointLabels = tScale.ticks.map(({value, ...tick}) => ({
+      value: tScale.getDecimalForPixel(tScale.getPixelForValue(value)),
+      ...tick
+    }));
   }
 
   fit() {
@@ -554,7 +554,7 @@ export default class PolarLinearScale extends LinearScaleBase {
       const ctx = this.ctx;
       ctx.save();
       ctx.beginPath();
-      pathRadiusLine(this, this.getDistanceFromCenterForValue(this._endValue), circular, this._pointLabels.length);
+      pathRadiusLine(this, this.getDistanceFromCenterForValue(this._endValue), circular, this._pointLabels);
       ctx.closePath();
       ctx.fillStyle = backgroundColor;
       ctx.fill();
@@ -569,12 +569,11 @@ export default class PolarLinearScale extends LinearScaleBase {
     const ctx = this.ctx;
     const opts = this.options;
     const {angleLines, grid, border} = opts;
-    const labelCount = this._pointLabels.length;
 
     let i, offset, position;
 
     if (opts.pointLabels.display) {
-      drawPointLabels(this, labelCount);
+      drawPointLabels(this, this._pointLabels);
     }
 
     if (grid.display) {
@@ -585,7 +584,7 @@ export default class PolarLinearScale extends LinearScaleBase {
           const optsAtIndex = grid.setContext(context);
           const optsAtIndexBorder = border.setContext(context);
 
-          drawRadiusLine(this, optsAtIndex, offset, labelCount, optsAtIndexBorder);
+          drawRadiusLine(this, optsAtIndex, offset, this._pointLabels, optsAtIndexBorder);
         }
       });
     }
@@ -593,7 +592,7 @@ export default class PolarLinearScale extends LinearScaleBase {
     if (angleLines.display) {
       ctx.save();
 
-      for (i = labelCount - 1; i >= 0; i--) {
+      for (i = this._pointLabels.length - 1; i >= 0; i--) {
         const optsAtIndex = angleLines.setContext(this.getPointLabelContext(i));
         const {color, lineWidth} = optsAtIndex;
 

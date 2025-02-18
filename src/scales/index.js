@@ -4,3 +4,4 @@ export {default as LogarithmicScale} from './scale.logarithmic.js';
 export {default as RadialLinearScale} from './scale.radialLinear.js';
 export {default as TimeScale} from './scale.time.js';
 export {default as TimeSeriesScale} from './scale.timeseries.js';
+export {default as PolarLinearScale} from './scale.polarLinear.js';

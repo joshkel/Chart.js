@@ -335,15 +335,17 @@ function createPointLabelContext(parent, index, label) {
   });
 }
 
-export default class RadialLinearScale extends LinearScaleBase {
+export default class PolarLinearScale extends LinearScaleBase {
 
-  static id = 'radialLinear';
+  static id = 'polarLinear';
 
   /**
    * @type {any}
    */
   static defaults = {
     display: true,
+
+    axis: 'r',
 
     // Boolean - Whether to animate scaling the chart from the centre
     animate: true,
@@ -479,11 +481,10 @@ export default class RadialLinearScale extends LinearScaleBase {
     this.drawingArea -= Math.min(this.drawingArea / 2, Math.max(leftMovement, rightMovement, topMovement, bottomMovement));
   }
 
-  getIndexAngle(index) {
-    const angleMultiplier = TAU / (this._pointLabels.length || 1);
+  getIndexAngle(iDecimal) {
     const startAngle = this.options.startAngle || 0;
 
-    return _normalizeAngle(index * angleMultiplier + toRadians(startAngle));
+    return _normalizeAngle(iDecimal * TAU + toRadians(startAngle));
   }
 
   getDistanceFromCenterForValue(value) {
@@ -517,8 +518,8 @@ export default class RadialLinearScale extends LinearScaleBase {
     }
   }
 
-  getPointPosition(index, distanceFromCenter, additionalAngle = 0) {
-    const angle = this.getIndexAngle(index) - HALF_PI + additionalAngle;
+  getPointPosition(iDecimal, distanceFromCenter, additionalAngle = 0) {
+    const angle = this.getIndexAngle(iDecimal) - HALF_PI + additionalAngle;
     return {
       x: Math.cos(angle) * distanceFromCenter + this.xCenter,
       y: Math.sin(angle) * distanceFromCenter + this.yCenter,
@@ -526,8 +527,8 @@ export default class RadialLinearScale extends LinearScaleBase {
     };
   }
 
-  getPointPositionForValue(index, value) {
-    return this.getPointPosition(index, this.getDistanceFromCenterForValue(value));
+  getPointPositionForValue(iDecimal, value) {
+    return this.getPointPosition(iDecimal, this.getDistanceFromCenterForValue(value));
   }
 
   getBasePosition(index) {

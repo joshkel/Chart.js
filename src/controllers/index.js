@@ -6,3 +6,4 @@ export {default as PolarAreaController} from './controller.polarArea.js';
 export {default as PieController} from './controller.pie.js';
 export {default as RadarController} from './controller.radar.js';
 export {default as ScatterController} from './controller.scatter.js';
+export {default as PolarController} from './controller.polar.js';

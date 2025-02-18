@@ -92,12 +92,13 @@ function fitWithPointLabels(scale) {
   for (let i = 0; i < valueCount; i++) {
     const opts = pointLabelOpts.setContext(scale.getPointLabelContext(i));
     padding[i] = opts.padding;
-    const pointPosition = scale.getPointPosition(i, scale.drawingArea + padding[i], additionalAngle);
+    const value = scale._pointLabels[i].value;
+    const pointPosition = scale.getPointPosition(value, scale.drawingArea + padding[i], additionalAngle);
     const plFont = toFont(opts.font);
-    const textSize = measureLabelSize(scale.ctx, plFont, scale._pointLabels[i]);
+    const textSize = measureLabelSize(scale.ctx, plFont, scale._pointLabels[i].label);
     labelSizes[i] = textSize;
 
-    const angleRadians = _normalizeAngle(scale.getIndexAngle(i) + additionalAngle);
+    const angleRadians = _normalizeAngle(scale.getIndexAngle(value) + additionalAngle);
     const angle = Math.round(toDegrees(angleRadians));
     const hLimits = determineLimits(angle, pointPosition.x, textSize.w, 0, 180);
     const vLimits = determineLimits(angle, pointPosition.y, textSize.h, 90, 270);
@@ -261,7 +262,17 @@ function drawPointLabelBox(ctx, opts, item) {
 function drawPointLabels(scale, labels) {
   const {ctx, options: {pointLabels}} = scale;
 
-  for (let i = labels.length - 1; i >= 0; i--) {
+  let startAt = labels.length - 1;
+
+  // Special case: A typical polar chart wraps around.  Avoid drawing
+  // overlapping labels.
+  if (scale._pointLabels.length > 1
+    && scale._pointLabelItems[startAt].x === scale._pointLabelItems[0].x
+    && scale._pointLabelItems[startAt].y === scale._pointLabelItems[0].y) {
+    startAt--;
+  }
+
+  for (let i = startAt; i >= 0; i--) {
     const item = scale._pointLabelItems[i];
     if (!item.visible) {
       // overlapping
@@ -607,7 +618,7 @@ export default class PolarLinearScale extends LinearScaleBase {
         ctx.lineDashOffset = optsAtIndex.borderDashOffset;
 
         offset = this.getDistanceFromCenterForValue(opts.reverse ? this.min : this.max);
-        position = this.getPointPosition(i, offset);
+        position = this.getPointPosition(this._pointLabels[i].value, offset);
         ctx.beginPath();
         ctx.moveTo(this.xCenter, this.yCenter);
         ctx.lineTo(position.x, position.y);
